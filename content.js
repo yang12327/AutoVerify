@@ -193,9 +193,9 @@ function Filter(text) {
   let Up = A[3] != false, Do = A[4] != false, Di = A[5] != false;
   if (!Up && Do) OCR = OCR.replaceAll("I", "l").toLowerCase();
   else if (Up && !Do) OCR = OCR.replaceAll("l", "I").toUpperCase();
-  else if (!Up && !Do) OCR = OCR.replaceAll(/o/gi, "0").replaceAll(/[lI]/g, "1");
+  else if (!Up && !Do) OCR = OCR.replaceAll(/o/gi, "0").replaceAll(/[lI]/g, "1").replaceAll(/z/gi, "2");
   if (!Di) {
-    OCR = OCR.replaceAll("0", "O").replaceAll("1", Up ? "I" : "l");
+    OCR = OCR.replaceAll("0", "O").replaceAll("1", Up ? "I" : "l").replaceAll("2", "Z");
     if (!Up) OCR = OCR.toLowerCase();
   }
   OCR = OCR.match(new RegExp("[" + (Up ? "A-Z" : "") + (Do ? "a-z" : "") + (Di ? "0-9" : "") + "]", 'g')).join("");

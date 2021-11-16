@@ -59,6 +59,7 @@ function set(sender) {  //按下元素
   if (A == null) A = [1];
   A[Mode] = Info;
   localStorage.setItem("AutoVerify" + location.pathname, JSON.stringify(A));
+  if (Mode == 8) elem.on("click", Load);
   Mode = 0;
 }
 

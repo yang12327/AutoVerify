@@ -1,7 +1,15 @@
 let A = null;
-$(() => { Load() })
-function Load() { //載入頁面
+let Count = 0;
+$(() => {
   A = JSON.parse(localStorage.getItem("AutoVerify" + location.pathname));
+  Load();
+  if (A != null && A[8] != null) {
+    let t = FindElem(8).obj;
+    if (t != null)
+      $(t).on("click", Load);
+  }
+})
+function Load() { //載入頁面
   if (A == null) return "未設定任何參數";
   let elem = [];
   for (let i = 1; i <= 2; i++) {
@@ -9,14 +17,7 @@ function Load() { //載入頁面
     if (e.obj == null) return e.err;
     elem.push(e.obj);
   }
-  img2txt(elem[0], A[0], elem[1]);
-  if (A[8] != null) {
-    let t = FindElem(8).obj;
-    if (t != null)
-      $(t).on("click", () => {
-        setTimeout(Load, 200);
-      });
-  }
+  setTimeout(() => { img2txt(elem[0], A[0], elem[1]); }, 300);
 }
 
 function FindElem(i) {
@@ -74,8 +75,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       break;
 
     case 5: //測試
-      console.log(sendResponse);
-      if ((res = Load(sendResponse)) != null)
+      Count = 0;
+      if ((res = Load()) != null)
         alert(res);
       break;
 
@@ -104,7 +105,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (A[1] != null) res.img = "更換驗證碼圖片(已設定)";
       if (A[2] != null) res.box = "更換回答輸入框(已設定)";
       if (A[8] != null) res.ren = "更換重新產生按鈕(已設定)";
-      res.filter = [A[3] != false, A[4] != false, A[5] != false, A[6] == true];
+      res.filter = [A[3] != false, A[4] != false, A[5] != false, A[6]];
       res.word = (A[7] == null ? 4 : A[7]);
       sendResponse(res);
       break;
@@ -133,7 +134,7 @@ function img2txt(img, engine, elem) {
   $.ajax({
     "url": "https://api.ocr.space/parse/image",
     "method": "POST",
-    "timeout": 0,
+    "timeout": 3000,
     "headers": {
       // "apikey": "helloworld",
       "apikey": "512d313bc588957",
@@ -145,22 +146,47 @@ function img2txt(img, engine, elem) {
       "OCREngine": engine,
       "base64image": b64img
     }
-  }).done(r => {
-    if (r.OCRExitCode == 1) {
-      let OCR = Filter(r.ParsedResults[0].ParsedText);
-      send({ info: 5, text: OCR });
-      console.log(OCR);
-      $(elem).val(OCR);
-    }
-    else {
-      send({ info: 5, err: r.ErrorMessage });
+  }).always((r, st) => {
+    if (st == "success") {
+      if (r.OCRExitCode == 1) {
+        let OCR = Filter(r.ParsedResults[0].ParsedText);
+        send({ info: 5, text: OCR });
+        if (Fail(OCR)) return;
+        $(elem).val(OCR);
+      }
+      else {
+        send({ info: 5, err: r.ErrorMessage });
+        console.log(r);
+        Fail("");
+      }
+    } else {
+      send({ info: 5, err: r.responseText });
       console.log(r);
+      Fail("");
     }
   });
 }
 
+function Fail(OCR) {
+  if (++Count < 5) {
+    if (A[6]) { //有開啟篩選器
+      let t = FindElem(8).obj;
+      if (t != null && OCR.length != (A[7] == null ? 4 : A[7])) {
+        $(t).click();
+        console.log("Retry(" + Count + ")");
+        return true;
+      }
+    }
+    return false;
+  } else {
+    console.log("Retry(" + Count + ") & Stop");
+    alert("辨識失敗太多次！\n你還是自己輸入吧😢");
+    return true;
+  }
+}
+
 function Filter(text) {
-  console.log("In:", text);
+  console.log(" In:", text);
   let OCR = text.match(/\w/g);
   if (OCR == null) return "";
   OCR = OCR.join("");
@@ -172,8 +198,7 @@ function Filter(text) {
     OCR = OCR.replaceAll("0", "O").replaceAll("1", Up ? "I" : "l");
     if (!Up) OCR = OCR.toLowerCase();
   }
-  console.log("Convert:", OCR);
   OCR = OCR.match(new RegExp("[" + (Up ? "A-Z" : "") + (Do ? "a-z" : "") + (Di ? "0-9" : "") + "]", 'g')).join("");
-  console.log("Filter:", OCR);
+  console.log("Out:", OCR);
   return OCR;
 }

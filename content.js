@@ -1,5 +1,5 @@
 let A = null;
-let Count = 0;
+let errCount = 0;
 $(() => {
   A = JSON.parse(localStorage.getItem("AutoVerify" + location.pathname));
   Load();
@@ -76,13 +76,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       break;
 
     case 5: //測試
-      Count = 0;
+      errCount = 0;
       if ((res = Load()) != null)
         alert(res);
       break;
 
+    case 9: //模式C
+      i = 2;
     case 4: //模式B
-      i = 1;
+      if (i == 0) i = 1;
     case 3: //模式A
       if (A == null) A = [];
       A[0] = i + 1;
@@ -101,7 +103,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     case 0: //點開插件
       res = {};
-      if (A != null) res.engine = A[0] == 1 ? "A模式" : "B模式";
+      if (A != null) res.engine = A[0] == 1 ? "A模式" : A[0] == 2 ? "B模式" : "C模式";
       else break;
       if (A[1] != null) res.img = "更換驗證碼圖片(已設定)";
       if (A[2] != null) res.box = "更換回答輸入框(已設定)";
@@ -132,6 +134,40 @@ function img2txt(img, engine, elem) {
   let b64img = canvas.toDataURL('image/jpeg');
   send({ info: 5, img: b64img });
   console.log(b64img);
+
+  function response(r) {
+    if (r.text != null) {
+      let OCR = Filter(r.text);
+      send({ info: 5, text: OCR });
+      if (Fail(OCR)) return;
+      errCount = 0;
+      $(elem).val(OCR);
+    }
+    else {
+      send({ info: 5, err: r.err });
+      console.log(r);
+      Fail("");
+    }
+  }
+  switch (engine) {
+    case 1:
+    case 2:
+      OCRspace(b64img, engine, response);
+      break;
+    case 3:
+
+      break;
+
+    default:
+      break;
+  }
+}
+
+function AntiCaptcha(b64img, numic, response) {
+
+}
+
+function OCRspace(b64img, engine, response) {
   $.ajax({
     "url": "https://api.ocr.space/parse/image",
     "method": "POST",
@@ -149,38 +185,27 @@ function img2txt(img, engine, elem) {
     }
   }).always((r, st) => {
     if (st == "success") {
-      if (r.OCRExitCode == 1) {
-        let OCR = Filter(r.ParsedResults[0].ParsedText);
-        send({ info: 5, text: OCR });
-        if (Fail(OCR)) return;
-        $(elem).val(OCR);
-      }
-      else {
-        send({ info: 5, err: r.ErrorMessage });
-        console.log(r);
-        Fail("");
-      }
-    } else {
-      send({ info: 5, err: r.responseText });
-      console.log(r);
-      Fail("");
-    }
+      if (r.OCRExitCode == 1)
+        response({ obj: r, text: r.ParsedResults[0].ParsedText });
+      else response({ obj: r, err: r.ErrorMessage });
+    } else response({ obj: r, err: r.responseText != null ? r.responseText : r.statusText });
   });
 }
 
+
 function Fail(OCR) {
-  if (++Count < 5) {
+  if (++errCount < 5) {
     if (A[6]) { //有開啟篩選器
       let t = FindElem(8).obj;
       if (t != null && OCR.length != (A[7] == null ? 4 : A[7])) {
         $(t).click();
-        console.log("Retry(" + Count + ")");
+        console.log("Retry(" + errCount + ")");
         return true;
       }
     }
     return false;
   } else {
-    console.log("Retry(" + Count + ") & Stop");
+    console.log("Retry(" + errCount + ") & Stop");
     alert("辨識失敗太多次！\n你還是自己輸入吧😢");
     return true;
   }

@@ -41,6 +41,7 @@ function send(Info, message = {}) {
           $("#Do").prop("checked", res.filter[1]);
           $("#Di").prop("checked", res.filter[2]);
           $("#W").prop("checked", res.filter[3]);
+          $("#Ca").prop("checked", res.filter[4]);
           $("#word").val(res.word);
           break;
 

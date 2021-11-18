@@ -108,7 +108,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (A[1] != null) res.img = "更換驗證碼圖片(已設定)";
       if (A[2] != null) res.box = "更換回答輸入框(已設定)";
       if (A[8] != null) res.ren = "更換重新產生按鈕(已設定)";
-      res.filter = [A[3] != false, A[4] != false, A[5] != false, A[6]];
+      res.filter = [A[3] != false, A[4] != false, A[5] != false, A[6], A[9]];
       res.word = (A[7] == null ? 4 : A[7]);
       sendResponse(res);
       break;
@@ -155,7 +155,7 @@ function img2txt(img, engine, elem) {
       OCRspace(b64img, engine, response);
       break;
     case 3:
-
+      AntiCaptcha(b64img, response);
       break;
 
     default:
@@ -163,20 +163,85 @@ function img2txt(img, engine, elem) {
   }
 }
 
-function AntiCaptcha(b64img, numic, response) {
+function AntiCaptcha(b64img, response) {
+  b64img = /.*base64,(.+)/.exec(b64img);
+  if (b64img == null || b64img.length < 2)
+    return response({ err: "圖片格式不正確" });
+  let Up = A[3] != false, Do = A[4] != false, Di = A[5] != false,
+    Case = A[9] == true, Length = A[6] ? (A[7] == null ? 4 : A[7]) : 0;
+  console.log("case:", Case, "numeric", !Di ? 2 : (!Up && !Do ? 1 : 0))
+  $.ajax({
+    "url": "https://api.anti-captcha.com/createTask",
+    "method": "POST",
+    "timeout": 5000,
+    "headers": {
+      "Accept": "application/json",
+      "Content-Type": "application/json"
+    },
+    "data": JSON.stringify({
+      "clientKey": "86bd697e61173e3a930a8be54e0e19ae",
+      "task": {
+        "type": "ImageToTextTask",
+        "body": b64img[1],
+        "phrase": false,
+        "case": Case,
+        "numeric": !Di ? 2 : (!Up && !Do ? 1 : 0),
+        "math": false,
+        "minLength": Length,
+        "maxLength": Length
+      }
+    })
+  }).always((r, st) => {
+    if (st != "success")
+      return response({ obj: r, err: r.responseText != null ? r.responseText : r.statusText });
+    if (r.errorId != 0)
+      return response({ obj: r, err: r.errorDescription });
+    function Check() {
+      $.ajax({
+        "url": "https://api.anti-captcha.com/getTaskResult",
+        "method": "POST",
+        "timeout": 10000,
+        "headers": {
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        "data": JSON.stringify({
+          "clientKey": "86bd697e61173e3a930a8be54e0e19ae",
+          "taskId": r.taskId
+        })
+      }).always((r2, st2) => {
+        if (st2 != "success")
+          return response({ obj: r2, err: r2.responseText != null ? r2.responseText : r2.statusText });
+        if (r2.errorId != 0)
+          return response({ obj: r2, err: r2.errorDescription });
+        console.log("r2 success ", r2.status);
+        switch (r2.status) {
+          case "processing":
+            setTimeout(Check, 500);
+            break;
+          case "ready":
+            response({ obj: r2, text: r2.solution.text });
+            break;
+        }
+      });
+    }
+    console.log("r", r);
+    Check();
 
+  });
 }
 
 function OCRspace(b64img, engine, response) {
   $.ajax({
     "url": "https://api.ocr.space/parse/image",
     "method": "POST",
-    "timeout": 3000,
+    "timeout": 5000,
     "headers": {
       // "apikey": "helloworld",
       "apikey": "512d313bc588957",
       "Content-Type": "application/x-www-form-urlencoded"
-    }, "data": {
+    },
+    "data": {
       "scale": true,
       "detectOrientation": true,
       "language": "eng",

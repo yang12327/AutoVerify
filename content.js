@@ -1,13 +1,7 @@
 let A = null;
 let errCount = 0;
 $(() => {
-  A = JSON.parse(localStorage.getItem("AutoVerify" + location.pathname));
-  Load();
-  if (A != null && A[8] != null) {
-    let t = FindElem(8).obj;
-    if (t != null)
-      $(t).on("click", Load);
-  }
+  send({ info: 'load', url: location.host });
 })
 function Load() { //載入頁面
   if (A == null) return "未設定任何參數";
@@ -23,106 +17,92 @@ function Load() { //載入頁面
 function FindElem(i) {
   let e = A[i];
   if (e == null) return { err: "參數未設定完全" };
-  let t = $(e.Tag);
-  if (t == null || t.length == 0) return { err: "找不到物件" };
-  t = t.get(t.length > 1 ? e.index : 0);
-  if (t == null) return { err: "找不到物件" };
+  let t = $(e.Tag + ":visible");
+  if (t == null || t.length == 0 ||
+    (t = t.get(t.length > 1 ? e.index : 0)) == null)
+    return { err: "找不到物件" };
   return { obj: t };
 }
 
-let Mode = 0;
-function SetAutoVerify(Type) {
-  $(":visible").on("click", function () { set(this) }); //在元素上貼標籤
-  Mode = Type;
-}
-
-function set(sender) {  //按下元素
-  if (!Mode) return;
-  let elem = $(sender);
-  let Info = {
-    Tag: elem.prop("tagName"),
-    index: -1
-  }
-  let i = 0;
-  $(Info.Tag + ":visible").each(function () {
-    if (this == elem.get(0)) { Info.index = i; return; }
-    i++;
-  })
-
-  if (elem.attr("id") != null)
-    Info.Tag = "#" + elem.attr("id");
-  else if (elem.attr("name") != null)
-    Info.Tag = "[name='" + elem.attr("name") + "']";
-  else if (Info.Tag == null || Info.index == -1)
-    return;
-  console.log(Info);
-  if (A == null) A = [1];
-  A[Mode] = Info;
-  localStorage.setItem("AutoVerify" + location.pathname, JSON.stringify(A));
-  if (Mode == 8) elem.on("click", Load);
-  Mode = 0;
-}
+var selected = null;
+document.addEventListener("contextmenu", (event) => {
+  selected = event.target;
+}, true);
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  let i = 0;
   let res = null;
   switch (request.info) {
-    case 6: //篩選器
-      console.log(request);
-      if (request.index != null && request.checked != null) {
-        A[request.index] = request.checked;
-        localStorage.setItem("AutoVerify" + location.pathname, JSON.stringify(A));
+    case 'menu':  //設定元素
+      console.log(selected)
+      let elem = $(selected);
+      let Info = {
+        Tag: elem.prop("tagName"),
+        index: -1
       }
+      let i = 0;
+      $(Info.Tag + ":visible").each(function () {
+        if (this == elem.get(0)) { Info.index = i; return; }
+        i++;
+      })
+      if (elem.attr("id") != null)
+        Info.Tag = "#" + elem.attr("id");
+      else if (elem.attr("name") != null)
+        Info.Tag = "[name='" + elem.attr("name") + "']";
+      else if (Info.Tag == null || Info.index == -1)
+        return;
+      if (request.index == 3)
+        elem.on("click", Load);
+      console.log(Info);
+      request.value = Info;
+    case 'setting': //修改設定
+      A[request.index] = request.value;
+      save();
       break;
 
-    case 5: //測試
+    case 'test': //測試
       errCount = 0;
       if ((res = Load()) != null)
-        alert(res);
+        send({ info: 'test', err: res });
       break;
 
-    case 9: //模式C
-      i = 2;
-    case 4: //模式B
-      if (i == 0) i = 1;
-    case 3: //模式A
-      if (A == null) A = [];
-      A[0] = i + 1;
-      localStorage.setItem("AutoVerify" + location.pathname, JSON.stringify(A));
-      console.log(A);
-      break;
+    case 'open': //點開插件
+      return sendResponse(A);
 
-    case 8: //設定重新產生
-      i = 7;
-    case 2: //設定輸入框
-      if (i == 0) i = 1;
-    case 1: //設定驗證碼
-      $(":visible").on("click", function () { set(this) }); //在元素上貼標籤
-      Mode = i + 1;
-      break;
-
-    case 0: //點開插件
-      res = {};
-      if (A != null) res.engine = A[0] == 1 ? "A模式" : A[0] == 2 ? "B模式" : "C模式";
-      else break;
-      if (A[1] != null) res.img = "更換驗證碼圖片(已設定)";
-      if (A[2] != null) res.box = "更換回答輸入框(已設定)";
-      if (A[8] != null) res.ren = "更換重新產生按鈕(已設定)";
-      res.filter = [A[3] != false, A[4] != false, A[5] != false, A[6], A[9]];
-      res.word = (A[7] == null ? 4 : A[7]);
-      sendResponse(res);
+    case 'load':  //載入頁面
+      A = request.data[location.host];
+      console.log("A", A)
+      if (A == null) A = [1, null, null, null, true, true, true, false, false, 4];
+      Load();
+      if (A[3] != null) {
+        let t = FindElem(3).obj;
+        if (t != null)
+          $(t).on("click", Load);
+      }
       break;
 
     default:
       console.log(request);
       break;
   }
+  sendResponse(null);
 });
 
 function send(message) {
   chrome.runtime.sendMessage(message, res => {
-    if (res != null) console.log(res);
+    console.log(message);
+    switch (message.info) {
+
+      default:
+        if (res != null) console.log(res);
+        break;
+    }
   });
+}
+
+function save() {
+  let data = {};
+  data[location.host] = A;
+  send({ info: 'save', data: data });
 }
 
 function img2txt(img, engine, elem) {
@@ -132,19 +112,19 @@ function img2txt(img, engine, elem) {
   canvas.height = img.height;
   ctx.drawImage(img, 0, 0);
   let b64img = canvas.toDataURL('image/jpeg');
-  send({ info: 5, img: b64img });
+  send({ info: 'test', img: b64img });
   console.log(b64img);
 
   function response(r) {
     if (r.text != null) {
       let OCR = Filter(r.text);
-      send({ info: 5, text: OCR });
+      send({ info: 'test', text: OCR });
       if (Fail(OCR)) return;
       errCount = 0;
       $(elem).val(OCR);
     }
     else {
-      send({ info: 5, err: r.err });
+      send({ info: 'test', err: r.err });
       console.log(r);
       Fail("");
     }
@@ -167,8 +147,8 @@ function AntiCaptcha(b64img, response) {
   b64img = /.*base64,(.+)/.exec(b64img);
   if (b64img == null || b64img.length < 2)
     return response({ err: "圖片格式不正確" });
-  let Up = A[3] != false, Do = A[4] != false, Di = A[5] != false,
-    Case = A[9] == true, Length = A[6] ? (A[7] == null ? 4 : A[7]) : 0;
+  let Up = A[4], Do = A[5], Di = A[6],
+    Case = A[7], Length = A[8] ? A[9] : 0;
   console.log("case:", Case, "numeric", !Di ? 2 : (!Up && !Do ? 1 : 0))
   $.ajax({
     "url": "https://api.anti-captcha.com/createTask",
@@ -260,10 +240,10 @@ function OCRspace(b64img, engine, response) {
 
 function Fail(OCR) {
   if (++errCount < 5) {
-    if (A[6]) { //有開啟篩選器
-      let t = FindElem(8).obj;
-      if (t != null && OCR.length != (A[7] == null ? 4 : A[7])) {
-        $(t).click();
+    if (A[8]) { //有開啟篩選器
+      let t = FindElem(3).obj;
+      if (t != null && OCR.length != A[9]) {
+        t.click();
         console.log("Retry(" + errCount + ")");
         return true;
       }
@@ -271,7 +251,6 @@ function Fail(OCR) {
     return false;
   } else {
     console.log("Retry(" + errCount + ") & Stop");
-    alert("辨識失敗太多次！\n你還是自己輸入吧😢");
     return true;
   }
 }
@@ -281,7 +260,7 @@ function Filter(text) {
   let OCR = text.match(/\w/g);
   if (OCR == null) return "";
   OCR = OCR.join("");
-  let Up = A[3] != false, Do = A[4] != false, Di = A[5] != false;
+  let Up = A[4], Do = A[5], Di = A[6];
   if (!Up && Do) OCR = OCR.replaceAll("I", "l").toLowerCase();
   else if (Up && !Do) OCR = OCR.replaceAll("l", "I").toUpperCase();
   else if (!Up && !Do) OCR = OCR.replaceAll(/o/gi, "0").replaceAll(/[lI]/g, "1").replaceAll(/z/gi, "2");

@@ -1,48 +1,49 @@
 $(() => { //點開插件
-  send(0);
-});
-
-$("[send]").on('click', function () {
-  send(parseInt($(this).attr("send")));
+  send('open');
 });
 
 $("[engine]").on('click', function () { //切換引擎
   $("#engine").text($(this).text().substr(0, 1) + "模式");
+  send('setting', 0, parseInt($(this).attr("engine")));
 });
 
-$("input[type=checkbox]").change(function () {
-  send(6, { index: parseInt($(this).attr("index")), checked: $(this).prop("checked") });
+$("input[type=checkbox]").change(function () {  //切換開關
+  send('setting', parseInt($(this).attr("index")), $(this).prop("checked"));
 });
 
-$("#word").change(function () {
-  send(6, { index: 7, checked: $(this).val() });
-  $("[index=6]").prop("checked", true).change();
+$("#word").change(function () { //調整字數
+  send('setting', 9, $(this).val());
+  $("[index=8]").prop("checked", true).change();
 });
 
-function send(Info, message = {}) {
+$('#testBtn').on('click', () => {  //測試
+  send('test');
+})
+
+$('#clear').on('click', () => {
+  send('setting', 1, null);
+  send('setting', 2, null);
+  send('setting', 3, null);
+})
+
+function send(Info, index, value) {
   chrome.tabs.query({
     active: true,
     currentWindow: true
   }, (tabs) => {
-    message.info = Info;
+    let message = { info: Info, index: index, value: value };
     chrome.tabs.sendMessage(tabs[0].id, message, res => {
       if (res == null) return;
       switch (message.info) {
-        case 0:
-          if (res.engine != null)
-            $("#engine").text(res.engine);
-          if (res.img != null)
-            $("[send=1]").text(res.img);
-          if (res.box != null)
-            $("[send=2]").text(res.box);
-          if (res.ren != null)
-            $("[send=8]").text(res.ren);
-          $("#Up").prop("checked", res.filter[0]);
-          $("#Do").prop("checked", res.filter[1]);
-          $("#Di").prop("checked", res.filter[2]);
-          $("#W").prop("checked", res.filter[3]);
-          $("#Ca").prop("checked", res.filter[4]);
-          $("#word").val(res.word);
+        case 'open':
+          let i = ['A', 'B', 'C'];
+          $("#engine").text(i[res[0] - 1] + "模式");
+          for (i = 1; i <= 3; i++) {
+            $("[index=" + i + "]").text(res[i] == null ? "❌" : "✔️");
+          }
+          for (i = 4; i <= 8; i++)
+            $("[index=" + i + "]").prop('checked', res[i]);
+          $("#word").val(res[9]);
           break;
 
         default:
@@ -55,16 +56,19 @@ function send(Info, message = {}) {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   switch (request.info) {
-    case 5:
+    case 'test':
       if (request.img != null) $("#TestImg").attr("src", request.img);
       if (request.text != null) $("#TestResult").text("辨識結果：『" + request.text + "』");
-      if (request.err != null) $("#TestError").text("辨識失敗：" + request.err);
+      if (request.err != null) {
+        $("#TestError").text("辨識失敗：" + request.err);
+        $("#TestResult").text("");
+      }
       break;
 
     default:
       request.from = sender.tab ? "content >" + sender.tab.url : "background"
-      sendResponse(request);
+      console.log(request);
       break;
   }
-  sendResponse();
+  sendResponse(null);
 });

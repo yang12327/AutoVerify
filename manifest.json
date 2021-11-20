@@ -6,7 +6,8 @@
   "permissions": [
     "activeTab",
     "scripting",
-    "alarms"
+    "alarms",
+    "storage"
   ],
   "action": {
     "default_title": "Auto Verify",

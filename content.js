@@ -1,13 +1,7 @@
 let A = null;
-let Count = 0;
+let errCount = 0;
 $(() => {
-  A = JSON.parse(localStorage.getItem("AutoVerify" + location.pathname));
-  Load();
-  if (A != null && A[8] != null) {
-    let t = FindElem(8).obj;
-    if (t != null)
-      $(t).on("click", Load);
-  }
+  send({ info: 'load', url: location.host });
 })
 function Load() { //載入頁面
   if (A == null) return "未設定任何參數";
@@ -17,110 +11,93 @@ function Load() { //載入頁面
     if (e.obj == null) return e.err;
     elem.push(e.obj);
   }
-  setTimeout(() => { img2txt(elem[0], A[0], elem[1]); }, 300);
+  $(elem[1]).val("");
+  setTimeout(() => {
+    img2txt(elem[0], A[0], elem[1]);
+  }, 100);
 }
 
 function FindElem(i) {
   let e = A[i];
   if (e == null) return { err: "參數未設定完全" };
-  let t = $(e.Tag);
-  if (t == null || t.length == 0) return { err: "找不到物件" };
-  t = t.get(t.length > 1 ? e.index : 0);
-  if (t == null) return { err: "找不到物件" };
+  let t = $(e.Tag + ":visible");
+  if (t == null || t.length == 0 ||
+    (t = t.get(t.length > 1 ? e.index : 0)) == null)
+    return { err: "找不到物件" };
   return { obj: t };
 }
 
-let Mode = 0;
-function SetAutoVerify(Type) {
-  $(":visible").on("click", function () { set(this) }); //在元素上貼標籤
-  Mode = Type;
-}
-
-function set(sender) {  //按下元素
-  if (!Mode) return;
-  let elem = $(sender);
-  let Info = {
-    Tag: elem.prop("tagName"),
-    index: -1
-  }
-  let i = 0;
-  $(Info.Tag + ":visible").each(function () {
-    if (this == elem.get(0)) { Info.index = i; return; }
-    i++;
-  })
-
-  if (elem.attr("id") != null)
-    Info.Tag = "#" + elem.attr("id");
-  else if (elem.attr("name") != null)
-    Info.Tag = "[name='" + elem.attr("name") + "']";
-  else if (Info.Tag == null || Info.index == -1)
-    return;
-  console.log(Info);
-  if (A == null) A = [1];
-  A[Mode] = Info;
-  localStorage.setItem("AutoVerify" + location.pathname, JSON.stringify(A));
-  if (Mode == 8) elem.on("click", Load);
-  Mode = 0;
-}
+var selected = null;
+document.addEventListener("contextmenu", (event) => {
+  selected = event.target;
+}, true);
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  let i = 0;
   let res = null;
   switch (request.info) {
-    case 6: //篩選器
-      console.log(request);
-      if (request.index != null && request.checked != null) {
-        A[request.index] = request.checked;
-        localStorage.setItem("AutoVerify" + location.pathname, JSON.stringify(A));
+    case 'menu':  //設定元素
+      let elem = $(selected);
+      let Info = {
+        Tag: elem.prop("tagName"),
+        index: -1
       }
+      let i = 0;
+      $(Info.Tag + ":visible").each(function () {
+        if (this == elem.get(0)) { Info.index = i; return; }
+        i++;
+      })
+      if (elem.attr("id") != null)
+        Info.Tag = "#" + elem.attr("id");
+      else if (elem.attr("name") != null)
+        Info.Tag = "[name='" + elem.attr("name") + "']";
+      else if (Info.Tag == null || Info.index == -1)
+        return;
+      if (request.index == 3)
+        elem.on("click", Load);
+      console.log(Info);
+      request.value = Info;
+    case 'setting': //修改設定
+      A[request.index] = request.value;
+      save();
       break;
 
-    case 5: //測試
-      Count = 0;
+    case 'test': //測試
+      errCount = 0;
       if ((res = Load()) != null)
-        alert(res);
+        send({ info: 'test', err: res });
       break;
 
-    case 4: //模式B
-      i = 1;
-    case 3: //模式A
-      if (A == null) A = [];
-      A[0] = i + 1;
-      localStorage.setItem("AutoVerify" + location.pathname, JSON.stringify(A));
-      console.log(A);
-      break;
+    case 'open': //點開插件
+      return sendResponse(A);
 
-    case 8: //設定重新產生
-      i = 7;
-    case 2: //設定輸入框
-      if (i == 0) i = 1;
-    case 1: //設定驗證碼
-      $(":visible").on("click", function () { set(this) }); //在元素上貼標籤
-      Mode = i + 1;
-      break;
-
-    case 0: //點開插件
-      res = {};
-      if (A != null) res.engine = A[0] == 1 ? "A模式" : "B模式";
-      else break;
-      if (A[1] != null) res.img = "更換驗證碼圖片(已設定)";
-      if (A[2] != null) res.box = "更換回答輸入框(已設定)";
-      if (A[8] != null) res.ren = "更換重新產生按鈕(已設定)";
-      res.filter = [A[3] != false, A[4] != false, A[5] != false, A[6]];
-      res.word = (A[7] == null ? 4 : A[7]);
-      sendResponse(res);
+    case 'load':  //載入頁面
+      A = request.data[location.host];
+      if (A == null) A = [4, null, null, null, true, true, true, false, false, 4];
+      Load();
+      if (A[3] != null) {
+        let t = FindElem(3).obj;
+        if (t != null)
+          $(t).on("click", Load);
+      }
       break;
 
     default:
       console.log(request);
       break;
   }
+  sendResponse(null);
 });
 
 function send(message) {
   chrome.runtime.sendMessage(message, res => {
     if (res != null) console.log(res);
   });
+}
+
+function save() {
+  let data = {};
+  data[location.host] = A;
+  send({ info: 'save', data: data });
 }
 
 function img2txt(img, engine, elem) {
@@ -130,17 +107,132 @@ function img2txt(img, engine, elem) {
   canvas.height = img.height;
   ctx.drawImage(img, 0, 0);
   let b64img = canvas.toDataURL('image/jpeg');
-  send({ info: 5, img: b64img });
+  send({ info: 'test', img: b64img });
   console.log(b64img);
+
+  function response(r) {
+    if ($(elem).val().length > 0)
+      return send({ info: 'test', err: '使用者中斷操作' });
+    if (r.text != null) {
+      let OCR = Filter(r.text);
+      send({ info: 'test', text: OCR });
+      if (Fail(OCR)) return;
+      errCount = 0;
+      $(elem).val(OCR);
+    }
+    else {
+      send({ info: 'test', err: r.err });
+      console.log(r);
+      Fail("");
+    }
+  }
+  switch (engine) {
+    case 1:
+    case 2:
+      OCRspace(b64img, engine, response);
+      break;
+    case 3:
+      AntiCaptcha(b64img, response);
+      break;
+    case 4:
+      ddddOCR(b64img, response)
+      break;
+  }
+}
+
+function ddddOCR(b64img, response) {
+  b64img = /.*base64,(.+)/.exec(b64img);
+  if (b64img == null || b64img.length < 2)
+    return response({ err: "圖片格式不正確" });
+  $.ajax({
+    "url": "https://api.zxcv.cx/ddddocr/api",
+    "method": "POST",
+    "timeout": 3000,
+    "data": {
+      "img": b64img[1]
+    }
+  }).always((r, st) => {
+    if (st != "success")
+      return response({ obj: r, err: r.responseText != null ? r.responseText : r.statusText });
+    response(JSON.parse(r));
+  });
+}
+
+function AntiCaptcha(b64img, response) {
+  b64img = /.*base64,(.+)/.exec(b64img);
+  if (b64img == null || b64img.length < 2)
+    return response({ err: "圖片格式不正確" });
+  let Up = A[4], Do = A[5], Di = A[6],
+    Case = A[7], Length = A[8] ? A[9] : 0;
+  $.ajax({
+    "url": "https://api.anti-captcha.com/createTask",
+    "method": "POST",
+    "timeout": 5000,
+    "headers": {
+      "Accept": "application/json",
+      "Content-Type": "application/json"
+    },
+    "data": JSON.stringify({
+      "clientKey": "86bd697e61173e3a930a8be54e0e19ae",
+      "task": {
+        "type": "ImageToTextTask",
+        "body": b64img[1],
+        "phrase": false,
+        "case": Case,
+        "numeric": !Di ? 2 : (!Up && !Do ? 1 : 0),
+        "math": false,
+        "minLength": Length,
+        "maxLength": Length
+      }
+    })
+  }).always((r, st) => {
+    if (st != "success")
+      return response({ obj: r, err: r.responseText != null ? r.responseText : r.statusText });
+    if (r.errorId != 0)
+      return response({ obj: r, err: r.errorDescription });
+    function Check() {
+      $.ajax({
+        "url": "https://api.anti-captcha.com/getTaskResult",
+        "method": "POST",
+        "timeout": 10000,
+        "headers": {
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        "data": JSON.stringify({
+          "clientKey": "86bd697e61173e3a930a8be54e0e19ae",
+          "taskId": r.taskId
+        })
+      }).always((r2, st2) => {
+        if (st2 != "success")
+          return response({ obj: r2, err: r2.responseText != null ? r2.responseText : r2.statusText });
+        if (r2.errorId != 0)
+          return response({ obj: r2, err: r2.errorDescription });
+        switch (r2.status) {
+          case "processing":
+            setTimeout(Check, 500);
+            break;
+          case "ready":
+            response({ obj: r2, text: r2.solution.text });
+            break;
+        }
+      });
+    }
+    Check();
+  });
+}
+
+function OCRspace(b64img, engine, response) {
   $.ajax({
     "url": "https://api.ocr.space/parse/image",
     "method": "POST",
-    "timeout": 3000,
+    "timeout": 5000,
     "headers": {
       // "apikey": "helloworld",
       "apikey": "512d313bc588957",
       "Content-Type": "application/x-www-form-urlencoded"
-    }, "data": {
+    },
+    "data": {
       "scale": true,
       "detectOrientation": true,
       "language": "eng",
@@ -149,49 +241,36 @@ function img2txt(img, engine, elem) {
     }
   }).always((r, st) => {
     if (st == "success") {
-      if (r.OCRExitCode == 1) {
-        let OCR = Filter(r.ParsedResults[0].ParsedText);
-        send({ info: 5, text: OCR });
-        if (Fail(OCR)) return;
-        $(elem).val(OCR);
-      }
-      else {
-        send({ info: 5, err: r.ErrorMessage });
-        console.log(r);
-        Fail("");
-      }
-    } else {
-      send({ info: 5, err: r.responseText });
-      console.log(r);
-      Fail("");
-    }
+      if (r.OCRExitCode == 1)
+        response({ obj: r, text: r.ParsedResults[0].ParsedText });
+      else response({ obj: r, err: r.ErrorMessage });
+    } else response({ obj: r, err: r.responseText != null ? r.responseText : r.statusText });
   });
 }
 
+
 function Fail(OCR) {
-  if (++Count < 5) {
-    if (A[6]) { //有開啟篩選器
-      let t = FindElem(8).obj;
-      if (t != null && OCR.length != (A[7] == null ? 4 : A[7])) {
-        $(t).click();
-        console.log("Retry(" + Count + ")");
+  if (++errCount < 5) {
+    if (A[8]) { //有開啟篩選器
+      let t = FindElem(3).obj;
+      if (t != null && OCR.length != A[9]) {
+        t.click();
+        console.log("Retry(" + errCount + ")");
         return true;
       }
     }
     return false;
   } else {
-    console.log("Retry(" + Count + ") & Stop");
-    alert("辨識失敗太多次！\n你還是自己輸入吧😢");
+    console.log("Retry(" + errCount + ") & Stop");
     return true;
   }
 }
 
 function Filter(text) {
-  console.log(" In:", text);
   let OCR = text.match(/\w/g);
   if (OCR == null) return "";
   OCR = OCR.join("");
-  let Up = A[3] != false, Do = A[4] != false, Di = A[5] != false;
+  let Up = A[4], Do = A[5], Di = A[6];
   if (!Up && Do) OCR = OCR.replaceAll("I", "l").toLowerCase();
   else if (Up && !Do) OCR = OCR.replaceAll("l", "I").toUpperCase();
   else if (!Up && !Do) OCR = OCR.replaceAll(/o/gi, "0").replaceAll(/[lI]/g, "1").replaceAll(/z/gi, "2");
@@ -199,7 +278,9 @@ function Filter(text) {
     OCR = OCR.replaceAll("0", "O").replaceAll("1", Up ? "I" : "l").replaceAll("2", "Z");
     if (!Up) OCR = OCR.toLowerCase();
   }
-  OCR = OCR.match(new RegExp("[" + (Up ? "A-Z" : "") + (Do ? "a-z" : "") + (Di ? "0-9" : "") + "]", 'g')).join("");
-  console.log("Out:", OCR);
+  OCR = OCR.match(new RegExp("[" + (Up ? "A-Z" : "") + (Do ? "a-z" : "") + (Di ? "0-9" : "") + "]", 'g'))
+  if (OCR == null) return "";
+  OCR = OCR.join("");
+  console.log(text, "=>", OCR);
   return OCR;
 }

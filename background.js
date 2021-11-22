@@ -1,10 +1,11 @@
 chrome.runtime.onInstalled.addListener(() => {
-    let contexts = ["驗證碼", "答案欄", "重新產生"];
-    for (var i = 0; i < contexts.length; i++) {
+    let text = ["這是「驗證碼」", "這是「答案欄」", "這是「重新產生」", "辨識到剪貼簿"];
+    let context = ["image", "editable", "all", "image"];
+    for (var i = 0; i < text.length; i++) {
         chrome.contextMenus.create({
             id: "setElem" + (i + 1),
-            title: "這是「" + contexts[i] + "」",
-            contexts: ["all"]
+            title: text[i],
+            contexts: [context[i]]
         });
     }
 });

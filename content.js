@@ -11,7 +11,10 @@ function Load() { //載入頁面
     if (e.obj == null) return e.err;
     elem.push(e.obj);
   }
-  setTimeout(() => { img2txt(elem[0], A[0], elem[1]); }, 300);
+  $(elem[1]).val("");
+  setTimeout(() => {
+    img2txt(elem[0], A[0], elem[1]);
+  }, 100);
 }
 
 function FindElem(i) {
@@ -33,7 +36,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   let res = null;
   switch (request.info) {
     case 'menu':  //設定元素
-      console.log(selected)
       let elem = $(selected);
       let Info = {
         Tag: elem.prop("tagName"),
@@ -70,8 +72,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     case 'load':  //載入頁面
       A = request.data[location.host];
-      console.log("A", A)
-      if (A == null) A = [1, null, null, null, true, true, true, false, false, 4];
+      if (A == null) A = [4, null, null, null, true, true, true, false, false, 4];
       Load();
       if (A[3] != null) {
         let t = FindElem(3).obj;
@@ -89,13 +90,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 function send(message) {
   chrome.runtime.sendMessage(message, res => {
-    console.log(message);
-    switch (message.info) {
-
-      default:
-        if (res != null) console.log(res);
-        break;
-    }
+    if (res != null) console.log(res);
   });
 }
 
@@ -116,6 +111,8 @@ function img2txt(img, engine, elem) {
   console.log(b64img);
 
   function response(r) {
+    if ($(elem).val().length > 0)
+      return send({ info: 'test', err: '使用者中斷操作' });
     if (r.text != null) {
       let OCR = Filter(r.text);
       send({ info: 'test', text: OCR });
@@ -137,10 +134,28 @@ function img2txt(img, engine, elem) {
     case 3:
       AntiCaptcha(b64img, response);
       break;
-
-    default:
+    case 4:
+      ddddOCR(b64img, response)
       break;
   }
+}
+
+function ddddOCR(b64img, response) {
+  b64img = /.*base64,(.+)/.exec(b64img);
+  if (b64img == null || b64img.length < 2)
+    return response({ err: "圖片格式不正確" });
+  $.ajax({
+    "url": "https://api.zxcv.cx/ddddocr/api",
+    "method": "POST",
+    "timeout": 3000,
+    "data": {
+      "img": b64img[1]
+    }
+  }).always((r, st) => {
+    if (st != "success")
+      return response({ obj: r, err: r.responseText != null ? r.responseText : r.statusText });
+    response(JSON.parse(r));
+  });
 }
 
 function AntiCaptcha(b64img, response) {
@@ -149,7 +164,6 @@ function AntiCaptcha(b64img, response) {
     return response({ err: "圖片格式不正確" });
   let Up = A[4], Do = A[5], Di = A[6],
     Case = A[7], Length = A[8] ? A[9] : 0;
-  console.log("case:", Case, "numeric", !Di ? 2 : (!Up && !Do ? 1 : 0))
   $.ajax({
     "url": "https://api.anti-captcha.com/createTask",
     "method": "POST",
@@ -194,7 +208,6 @@ function AntiCaptcha(b64img, response) {
           return response({ obj: r2, err: r2.responseText != null ? r2.responseText : r2.statusText });
         if (r2.errorId != 0)
           return response({ obj: r2, err: r2.errorDescription });
-        console.log("r2 success ", r2.status);
         switch (r2.status) {
           case "processing":
             setTimeout(Check, 500);
@@ -205,9 +218,7 @@ function AntiCaptcha(b64img, response) {
         }
       });
     }
-    console.log("r", r);
     Check();
-
   });
 }
 
@@ -256,7 +267,6 @@ function Fail(OCR) {
 }
 
 function Filter(text) {
-  console.log(" In:", text);
   let OCR = text.match(/\w/g);
   if (OCR == null) return "";
   OCR = OCR.join("");
@@ -268,7 +278,9 @@ function Filter(text) {
     OCR = OCR.replaceAll("0", "O").replaceAll("1", Up ? "I" : "l").replaceAll("2", "Z");
     if (!Up) OCR = OCR.toLowerCase();
   }
-  OCR = OCR.match(new RegExp("[" + (Up ? "A-Z" : "") + (Do ? "a-z" : "") + (Di ? "0-9" : "") + "]", 'g')).join("");
-  console.log("Out:", OCR);
+  OCR = OCR.match(new RegExp("[" + (Up ? "A-Z" : "") + (Do ? "a-z" : "") + (Di ? "0-9" : "") + "]", 'g'))
+  if (OCR == null) return "";
+  OCR = OCR.join("");
+  console.log(text, "=>", OCR);
   return OCR;
 }

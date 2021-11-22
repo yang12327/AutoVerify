@@ -3,7 +3,9 @@ $(() => { //點開插件
 });
 
 $("[engine]").on('click', function () { //切換引擎
-  $("#engine").text($(this).text().substr(0, 1) + "模式");
+  let mode = $(this).text().substr(0, 1);
+  $("#engine").text(mode + "模式");
+  $("[for=Ca]").css('text-decoration', mode != 'C' ? 'line-through' : 'none');
   send('setting', 0, parseInt($(this).attr("engine")));
 });
 
@@ -17,13 +19,17 @@ $("#word").change(function () { //調整字數
 });
 
 $('#testBtn').on('click', () => {  //測試
+  $('#TestResult').html('<div class="d-flex justify-content-center"><div class="spinner-border text-success" role="status"><span class="visually-hidden">正在辨識……</span></div></div>');
+  $('#TestError').html('');
   send('test');
 })
 
-$('#clear').on('click', () => {
-  send('setting', 1, null);
-  send('setting', 2, null);
-  send('setting', 3, null);
+$('#clear').on('click', () => { //清除
+  for (let i = 1; i <= 3; i++) {
+    send('setting', i, null);
+    $("[index=" + i + "]").text("❌");
+  }
+  $("[for=W]").css('text-decoration', 'line-through');
 })
 
 function send(Info, index, value) {
@@ -35,8 +41,8 @@ function send(Info, index, value) {
     chrome.tabs.sendMessage(tabs[0].id, message, res => {
       if (res == null) return;
       switch (message.info) {
-        case 'open':
-          let i = ['A', 'B', 'C'];
+        case 'open':  //點開插件
+          let i = ['A', 'B', 'C', 'D'];
           $("#engine").text(i[res[0] - 1] + "模式");
           for (i = 1; i <= 3; i++) {
             $("[index=" + i + "]").text(res[i] == null ? "❌" : "✔️");
@@ -44,6 +50,8 @@ function send(Info, index, value) {
           for (i = 4; i <= 8; i++)
             $("[index=" + i + "]").prop('checked', res[i]);
           $("#word").val(res[9]);
+          $("[for=Ca]").css('text-decoration', res[0] != 3 ? 'line-through' : 'none');
+          $("[for=W]").css('text-decoration', res[3] == null ? 'line-through' : 'none');
           break;
 
         default:

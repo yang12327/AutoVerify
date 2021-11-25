@@ -37,13 +37,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   switch (request.info) {
     case 'menu':  //設定元素
       let elem = $(selected);
+      if (request.index == 4) {   //辨識到剪貼簿
+        img2txt(selected, 4, null);
+        break;
+      }
       let Info = {
         Tag: elem.prop("tagName"),
         index: -1
       }
       let i = 0;
       $(Info.Tag + ":visible").each(function () {
-        if (this == elem.get(0)) { Info.index = i; return; }
+        if (this == elem.get(0)) {
+          Info.index = i;
+          return;
+        }
         i++;
       })
       if (elem.attr("id") != null)
@@ -51,7 +58,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       else if (elem.attr("name") != null)
         Info.Tag = "[name='" + elem.attr("name") + "']";
       else if (Info.Tag == null || Info.index == -1)
-        return;
+        break;
       if (request.index == 3)
         elem.on("click", Load);
       console.log(Info);
@@ -111,14 +118,24 @@ function img2txt(img, engine, elem) {
   console.log(b64img);
 
   function response(r) {
-    if ($(elem).val().length > 0)
+    if (elem != null && $(elem).val().length > 0)
       return send({ info: 'test', err: '使用者中斷操作' });
     if (r.text != null) {
-      let OCR = Filter(r.text);
-      send({ info: 'test', text: OCR });
-      if (Fail(OCR)) return;
-      errCount = 0;
-      $(elem).val(OCR);
+      if (elem == null) { //複製到剪貼簿
+        var clip_area = document.createElement('textarea');
+        clip_area.textContent = r.text;
+        document.body.appendChild(clip_area);
+        clip_area.select();
+        document.execCommand('copy');
+        clip_area.parentNode.removeChild(clip_area);
+        alert("辨識結果「" + r.text + "」已複製到剪貼簿");
+      }
+      else {
+        let OCR = Filter(r.text);
+        send({ info: 'test', text: OCR });
+        if (Fail(OCR)) return;
+        errCount = 0; $(elem).val(OCR);
+      }
     }
     else {
       send({ info: 'test', err: r.err });
@@ -154,6 +171,7 @@ function ddddOCR(b64img, response) {
   }).always((r, st) => {
     if (st != "success")
       return response({ obj: r, err: r.responseText != null ? r.responseText : r.statusText });
+    console.log(r);
     response(JSON.parse(r));
   });
 }

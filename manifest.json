@@ -1,7 +1,7 @@
 {
     "name": "自動驗證碼",
     "description": "為你日常使用的系統自動辨識驗證碼",
-    "version": "1.5",
+    "version": "1.6",
     "manifest_version": 3,
     "icons": {
         "48": "icon.png"

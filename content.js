@@ -289,9 +289,18 @@ function Filter(text) {
   if (OCR == null) return "";
   OCR = OCR.join("");
   let Up = A[4], Do = A[5], Di = A[6];
-  if (!Up && Do) OCR = OCR.replaceAll("I", "l").toLowerCase();
-  else if (Up && !Do) OCR = OCR.replaceAll("l", "I").toUpperCase();
-  else if (!Up && !Do) OCR = OCR.replaceAll(/o/gi, "0").replaceAll(/[lI]/g, "1").replaceAll(/z/gi, "2");
+  if (!Up && Do)
+    OCR = OCR.replaceAll("I", "l")
+      .replaceAll('6', 'b')
+      .replaceAll('9', 'q').toLowerCase();
+  else if (Up && !Do)
+    OCR = OCR.replaceAll("l", "I").toUpperCase();
+  else if (!Up && !Do)
+    OCR = OCR.replaceAll(/o/gi, "0")
+      .replaceAll(/[lI]/g, "1")
+      .replaceAll(/z/gi, "2")
+      .replaceAll('b', '6')
+      .replaceAll('q', '9');
   if (!Di) {
     OCR = OCR.replaceAll("0", "O").replaceAll("1", Up ? "I" : "l").replaceAll("2", "Z");
     if (!Up) OCR = OCR.toLowerCase();
